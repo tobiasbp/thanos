@@ -66,18 +66,12 @@ spec:
             # Read Thanos generated config here
             - name: prometheus-shared
               mountPath: /etc/prometheus-shared
+            # Store data here
             - name: prometheus-data
               mountPath: /data/prometheus
+            # Read rules here
             - name: rules-volume
               mountPath: /etc/prometheus/rules
-            #- name: config-volume
-            #  mountPath: /etc/prometheus
-            #- name: config-volume
-            #  mountPath: /etc/prometheus/prometheus.yml
-            #  subPath: prometheus.yml
-            #- name: config-volume
-            #  mountPath: /etc/prometheus/first_rules.yml
-            #  subPath: first_rules.yml
           env:
             #- name: LDAP_BIND_DN
             #  valueFrom:
@@ -118,3 +112,16 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+  # Each replica will claim persistent storage
+  volumeClaimTemplates:
+  - metadata:
+      name: prometheus-data
+      namespace: monitoring
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 20Gi
+      # Specific for Digital Ocean
+      storageClassName: do-block-storage
