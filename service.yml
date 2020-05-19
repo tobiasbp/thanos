@@ -30,6 +30,8 @@ spec:
     metadata:
       labels:
         app: prometheus-app
+        # Thanos Querier will find us by looking for this
+        thanos-store-api: "true"
     spec:
       securityContext:
           runAsUser: 65534
@@ -61,7 +63,8 @@ spec:
             - "--storage.tsdb.min-block-duration=2h"
             - "--storage.tsdb.max-block-duration=2h"
           ports:
-            - containerPort: 9090
+            - name: prometheus
+              containerPort: 9090
           volumeMounts:
             # Read Thanos generated config here
             - name: prometheus-shared
@@ -96,14 +99,30 @@ spec:
             #- "--objstore.config-file=bucket.yml"
             # Look for updates to rules here
             - "--reloader.rule-dir=/etc/prometheus/rules/"
+          ports:
+            - name: http-sidecar
+              containerPort: 10902
+            - name: grpc
+              containerPort: 10901
+          livenessProbe:
+            httpGet:
+              port: 10902
+              path: /-/healthy
+          readinessProbe:
+            httpGet:
+              port: 10902
+              path: /-/ready
           volumeMounts:
             # Write config here, so Prometheus can read it
             - name: prometheus-shared
               mountPath: /etc/prometheus-shared
+            # Read Prometheus data here (Should be read only?)
             - name: prometheus-data
               mountPath: /data/prometheus
+            # Read config file here
             - name: config-volume
               mountPath: /etc/prometheus
+            # Look for updates to rules here
             - name: rules-volume
               mountPath: /etc/prometheus/rules
           env:
@@ -112,7 +131,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-  # Each replica will claim persistent storage
+  # Each replica will claim own persistent storage
   volumeClaimTemplates:
   - metadata:
       name: prometheus-data
