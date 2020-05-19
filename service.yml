@@ -1,0 +1,120 @@
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: prometheus-svc
+#  namespace: monitoring
+#  labels:
+#    app: prometheus-ss
+#spec:
+#  ports:
+#  - port: 9090
+#    targetPort: 9090
+#    protocol: TCP
+#  selector:
+#    app: prometheus-app
+#---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus-set
+  namespace: monitoring
+  #labels:
+  #  app: prometheus-app
+spec:
+  replicas: 1
+  serviceName: prometheus-service
+  selector:
+    matchLabels:
+      app: prometheus-app
+  template:
+    metadata:
+      labels:
+        app: prometheus-app
+    spec:
+      securityContext:
+          runAsUser: 65534
+          fsGroup: 65534
+      volumes:
+        #- name: prom-data-volume
+        #  persistentVolumeClaim:
+        #    claimName: prom-data-pvc
+        # Share config between containers with this volume
+        - name: prometheus-shared
+          emptyDir: {}
+        - name: prometheus-data
+          emptyDir: {}
+        - name: config-volume
+          configMap:
+            name: prom-config
+        - name: rules-volume
+          configMap:
+            name: prom-rules
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.17.2
+          args:
+            - "--config.file=/etc/prometheus-shared/prometheus.yml"
+            - "--storage.tsdb.path=/data/prometheus"
+            #- "--web.enable-admin-api"
+            # Thanos can reload config on change
+            - "--web.enable-lifecycle"
+            - "--storage.tsdb.min-block-duration=2h"
+            - "--storage.tsdb.max-block-duration=2h"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            # Read Thanos generated config here
+            - name: prometheus-shared
+              mountPath: /etc/prometheus-shared
+            - name: prometheus-data
+              mountPath: /data/prometheus
+            - name: rules-volume
+              mountPath: /etc/prometheus/rules
+            #- name: config-volume
+            #  mountPath: /etc/prometheus
+            #- name: config-volume
+            #  mountPath: /etc/prometheus/prometheus.yml
+            #  subPath: prometheus.yml
+            #- name: config-volume
+            #  mountPath: /etc/prometheus/first_rules.yml
+            #  subPath: first_rules.yml
+          env:
+            #- name: LDAP_BIND_DN
+            #  valueFrom:
+            #    secretKeyRef:
+            #      name: gf-secret
+            #      key: ldap_bind_dn
+            #- name: GF_DATABASE_SSL_MODE
+            #  value: 'false'
+        - name: thanos
+          image: thanosio/thanos:v0.12.2
+          args:
+            - "sidecar"
+            # Read the Prometheus data from here
+            - "--tsdb.path=/data/prometheus"
+            # Contact Prometheus here
+            - "--prometheus.url=http://localhost:9090"
+            # Look for updates to this file
+            - "--reloader.config-file=/etc/prometheus/prometheus.yml.tmpl"
+            # Build this config file for Prometheus to consume
+            - "--reloader.config-envsubst-file=/etc/prometheus-shared/prometheus.yml"
+            # Config for object storage
+            #- "--objstore.config-file=bucket.yml"
+            # Look for updates to rules here
+            - "--reloader.rule-dir=/etc/prometheus/rules/"
+          volumeMounts:
+            # Write config here, so Prometheus can read it
+            - name: prometheus-shared
+              mountPath: /etc/prometheus-shared
+            - name: prometheus-data
+              mountPath: /data/prometheus
+            - name: config-volume
+              mountPath: /etc/prometheus
+            - name: rules-volume
+              mountPath: /etc/prometheus/rules
+          env:
+            # Unique name to use in prom config 
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
