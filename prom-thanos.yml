@@ -4,6 +4,8 @@ metadata:
   name: thanos-store-gateway
   namespace: monitoring
 spec:
+  # Headless service. Not loadbalancing
+  clusterIP: None
   ports:
   - port: 10901
     targetPort: 10901
