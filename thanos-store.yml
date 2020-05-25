@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thanos-store-gateway
+  namespace: monitoring
+  labels:
+    app: thanos-store-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: thanos-store-gateway
+  serviceName: thanos-store-gateway
+  template:
+    metadata:
+      labels:
+        app: thanos-store-gateway
+        thanos-store-api: "true"
+    spec:
+      containers:
+        - name: thanos
+          image: thanosio/thanos:v0.12.2
+          args:
+          - store
+          - --log.level=debug
+          - --data-dir=/var/thanos/store
+          - --objstore.config-file=/etc/thanos/remote_storage.yml
+          ports:
+          - name: http
+            containerPort: 10902
+          - name: grpc
+            containerPort: 10901
+          livenessProbe:
+            httpGet:
+              port: 10902
+              path: /-/healthy
+          readinessProbe:
+            httpGet:
+              port: 10902
+              path: /-/ready
+          volumeMounts:
+            # Store cache here
+            - name: thanos-data
+              mountPath: /var/thanos/store
+              readOnly: false
+            # Read object storage config here
+            - name: thanos-config
+              mountPath: /etc/thanos
+      volumes:
+        - name: thanos-config
+          secret:
+            secretName: thanos-config
+  # Each replica will claim own persistent storage
+  volumeClaimTemplates:
+  - metadata:
+      name: thanos-data
+      namespace: monitoring
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 5Gi
+      # Specific for Digital Ocean
+      storageClassName: do-block-storage

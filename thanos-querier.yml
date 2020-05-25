@@ -20,8 +20,11 @@ spec:
         image: thanosio/thanos:v0.12.2
         args:
         - query
-        - --log.level=debug
+        #- --log.level=debug
+        # The label on prom data to use for deduplication
         - --query.replica-label=replica
+        # Get all IPs from headless service 'thanos-store-gateway'
+        # These are the sidecars AND the store components
         - --store=dnssrv+thanos-store-gateway:10901
         ports:
         - name: http
