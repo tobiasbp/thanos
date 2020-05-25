@@ -40,12 +40,22 @@ data:
     scrape_configs:
       # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
       - job_name: 'prometheus'
-    
+        
         # metrics_path defaults to '/metrics'
         # scheme defaults to 'http'.
-    
+        
         static_configs:
         - targets: ['localhost:9090']
+      
+      #- job_name: 'federate'
+      #  metrics_path: /federate
+      #  honor_labels: true
+      #  params:
+      #    'match[]':
+      #      - '{job="name_of_job_to_read"}'
+      #  static_configs:
+      #    - targets:
+      #      - my-other-prometheus:9090
 ---
 apiVersion: v1 
 kind: ConfigMap 
